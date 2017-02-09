@@ -5,47 +5,38 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
-	"strconv"
-
-	"io/ioutil"
 
 	"github.com/auth0/go-jwt-middleware"
 	"github.com/dgrijalva/jwt-go"
 )
 
-var remoteURLFlag = flag.String("remoteURL", "http://localhost:8080", "The remote host to proxy to.")
-var keysFlag = flag.String("keys", "config.json", "The location of the JSON map containing issuers and their public keys.")
-var portFlag = flag.Int("port", 9090, "The port for the proxy to listen on.")
+var remoteURLFlag = flag.String("remoteURL", "", "The remote host to proxy to.")
+var keysFlag = flag.String("keys", "", "The location of the JSON map containing issuers and their public keys.")
+var portFlag = flag.String("port", "", "The port for the proxy to listen on.")
 
 func main() {
 	flag.Parse()
 
-	u, err := url.Parse(*remoteURLFlag)
+	remoteURL, err := getRemoteURL()
 	if err != nil {
-		fmt.Printf("Failed to parse remoteURL %s with error %v", *remoteURLFlag, err)
+		fmt.Println(err)
 		os.Exit(-1)
 	}
 
-	file, err := os.Open(*keysFlag)
+	keys, err := getKeys()
 	if err != nil {
-		fmt.Printf("Failed to open file %s with error %v", *keysFlag, err)
+		fmt.Println(err)
 		os.Exit(-1)
 	}
 
-	data, err := ioutil.ReadAll(file)
+	port, err := getPort()
 	if err != nil {
-		fmt.Printf("Failed to read file %s with error %v", *keysFlag, err)
-		os.Exit(-1)
-	}
-
-	keys := make(map[string]string)
-	err = json.Unmarshal(data, &keys)
-	if err != nil {
-		fmt.Printf("Failed to parse JSON file %s with error %v", *keysFlag, err)
+		fmt.Println(err)
 		os.Exit(-1)
 	}
 
@@ -82,7 +73,58 @@ func main() {
 	})
 
 	// Wrap the proxy in authentication.
-	app := jwtmw.Handler(httputil.NewSingleHostReverseProxy(u))
+	app := jwtmw.Handler(httputil.NewSingleHostReverseProxy(remoteURL))
 
-	http.ListenAndServe(":"+strconv.Itoa(*portFlag), app)
+	http.ListenAndServe(":"+port, app)
+}
+
+func getPort() (string, error) {
+	port := os.Getenv("JWTPROXY_LISTEN_PORT")
+	if port == "" {
+		port = *portFlag
+	}
+	if port == "" {
+		return "9090", errors.New("JWTPROXY_LISTEN_PORT environment variable or port command line flag not found")
+	}
+	return port, nil
+}
+
+func getRemoteURL() (*url.URL, error) {
+	remoteURL := os.Getenv("JWTPROXY_REMOTE_URL")
+	if remoteURL == "" {
+		remoteURL = *remoteURLFlag
+	}
+	if remoteURL == "" {
+		return nil, errors.New("JWTPROXY_REMOTE_URL environment variable or remoteURL command line flag not found")
+	}
+	u, err := url.Parse(remoteURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse remoteURL %s with error %v", remoteURL, err)
+	}
+	return u, nil
+}
+
+func getKeys() (map[string]string, error) {
+	keys := make(map[string]string)
+	configPath := os.Getenv("JWTPROXY_CONFIG")
+	if configPath == "" {
+		configPath = *keysFlag
+	}
+	if configPath == "" {
+		return keys, errors.New("JWTPROXY_CONFIG environment variable or config command line flag not found")
+	}
+	file, err := os.Open(configPath)
+	defer file.Close()
+	if err != nil {
+		return keys, fmt.Errorf("Failed to open file %s with error %v", configPath, err)
+	}
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		return keys, fmt.Errorf("Failed to read file %s with error %v", configPath, err)
+	}
+	err = json.Unmarshal(data, &keys)
+	if err != nil {
+		return keys, fmt.Errorf("Failed to parse JSON file %s with error %v", configPath, err)
+	}
+	return keys, nil
 }

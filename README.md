@@ -15,15 +15,23 @@ openssl rsa -in example_private.pem -outform PEM -pubout -out example_public.pem
 You start the proxy passing it a map of issuers to public keys. You'll need to replace newlines
 with \n in JSON.
 
-- config.json
+- keys.json
 ```
 {
     "example.com": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxFj26fqmulXntc7kCp9t\nMs6MEQUsk2r16Jd6k+aZSaLBo0dVgP77q1os10gZT4N0gYH6NsbVqP4+wWAUIDie\nmhpxq986z5mtB/lGvmHmaQcK/bOnEvcLWinHJZIla1m2RF7diN5/WBRNh8CyYMiW\n+BV/6dngknBtP7bDpnCkYrySaOQtKRvrech1UFRKgQjD8bprrcUmOFWYrmKe2NCx\ncQs9RhYuACt3Du2Z4VwVWN2xvL5LlZdWK7jLENe3MkOZU5WcwA7n+K/tulqA9uNR\nv8cRIL/y8BUwUsUoqBiyVZXQUa7BgE82GoTXtv3uqkN/yZxnlEcaJW5BD1nFzuvu\nyQIDAQAB\n-----END PUBLIC KEY-----"
 }
 ```
 
+You can run it yourself...
+
 ```
-jwtproxy -remoteURL http://example.com:8080 -keys config.json
+jwtproxy -remoteURL http://example.com:8080 -keys keys.json
+```
+
+Or you can run the Docker container, using environment variables to pass in required data. In this case, exposing the linked container 'hopeful_pike'.
+
+```
+docker run --link hopeful_pike -p 9090:9090/tcp --rm -e "JWTPROXY_LISTEN_PORT=9090" -e "JWTPROXY_REMOTE_URL=http://hopeful_pike:8080" -e "JWTPROXY_CONFIG=keys.json" adrianhesketh/jwtproxy
 ```
 
 Now attempt to use `curl` to access your local proxy.
