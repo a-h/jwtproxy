@@ -142,7 +142,7 @@ func getKeys() (map[string]string, error) {
 }
 
 func getHealthCheckURI() string {
-	hc := os.Getenv("JWTPROXY_REMOTE_URL")
+	hc := os.Getenv("JWTPROXY_HEALTHCHECK_URI")
 	if hc == "" {
 		return *healthCheckFlag
 	}
