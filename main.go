@@ -18,6 +18,7 @@ import (
 var remoteURLFlag = flag.String("remoteURL", "", "The remote host to proxy to.")
 var keysFlag = flag.String("keys", "", "The location of the JSON map containing issuers and their public keys.")
 var portFlag = flag.String("port", "", "The port for the proxy to listen on.")
+var healthCheckFlag = flag.String("health", "/health", "The path to the healthcheck endpoint.")
 
 func main() {
 	flag.Parse()
@@ -73,7 +74,18 @@ func main() {
 	})
 
 	// Wrap the proxy in authentication.
-	app := jwtmw.Handler(httputil.NewSingleHostReverseProxy(remoteURL))
+	auth := jwtmw.Handler(httputil.NewSingleHostReverseProxy(remoteURL))
+
+	// Wrap the authentication in a health check (health checks don't need authentication).
+	health := HealthCheckHandler{
+		Path: getHealthCheckURI(),
+		Next: auth,
+	}
+
+	// Wrap the health check in a logger.
+	app := LoggingHandler{
+		Next: health,
+	}
 
 	http.ListenAndServe(":"+port, app)
 }
@@ -127,4 +139,12 @@ func getKeys() (map[string]string, error) {
 		return keys, fmt.Errorf("Failed to parse JSON file %s with error %v", configPath, err)
 	}
 	return keys, nil
+}
+
+func getHealthCheckURI() string {
+	hc := os.Getenv("JWTPROXY_REMOTE_URL")
+	if hc == "" {
+		return *healthCheckFlag
+	}
+	return hc
 }
