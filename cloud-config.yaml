@@ -1,0 +1,18 @@
+#cloud-config
+rancher:
+    write_files:
+        - path: "/etc/keys.json"
+            permissions: "0644"
+            owner: "root"
+            content: |
+                {
+                    "example.com": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxFj26fqmulXntc7kCp9t\nMs6MEQUsk2r16Jd6k+aZSaLBo0dVgP77q1os10gZT4N0gYH6NsbVqP4+wWAUIDie\nmhpxq986z5mtB/lGvmHmaQcK/bOnEvcLWinHJZIla1m2RF7diN5/WBRNh8CyYMiW\n+BV/6dngknBtP7bDpnCkYrySaOQtKRvrech1UFRKgQjD8bprrcUmOFWYrmKe2NCx\ncQs9RhYuACt3Du2Z4VwVWN2xvL5LlZdWK7jLENe3MkOZU5WcwA7n+K/tulqA9uNR\nv8cRIL/y8BUwUsUoqBiyVZXQUa7BgE82GoTXtv3uqkN/yZxnlEcaJW5BD1nFzuvu\nyQIDAQAB\n-----END PUBLIC KEY-----"
+                }
+    services:
+        jwtproxy:
+            image: adrianhesketh/jwtproxy
+            restart: always
+            environment:
+            - JWTPROXY_LISTEN_PORT: 9090
+            - JWTPROXY_REMOTE_URL: http://localhost:8080
+            - JWTPROXY_CONFIG: /etc/keys.json
