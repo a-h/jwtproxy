@@ -1,6 +1,7 @@
 #cloud-config
 rancher:
     write_files:
+        - container: jwtproxy
         - path: "/etc/keys.json"
             permissions: "0644"
             owner: "root"
@@ -13,6 +14,6 @@ rancher:
             image: adrianhesketh/jwtproxy
             restart: always
             environment:
-            - JWTPROXY_LISTEN_PORT: 9090
-            - JWTPROXY_REMOTE_URL: http://localhost:8080
-            - JWTPROXY_CONFIG: /etc/keys.json
+            - JWTPROXY_LISTEN_PORT=9090
+            - JWTPROXY_REMOTE_URL=http://localhost:8080
+            - JWTPROXY_CONFIG=/etc/keys.json
