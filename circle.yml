@@ -1,0 +1,10 @@
+machine:
+  services:
+    - docker
+
+dependencies:
+  pre:
+    - docker run --rm -v `pwd`:/src/github.com/a-h/jwtproxy -w /src/github.com/a-h/jwtproxy golang:latest /bin/sh build.sh
+  override:
+    # Build the docker image.
+    - docker build --rm=false -t adrianhesketh/jwtproxy .
