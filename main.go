@@ -83,9 +83,7 @@ func main() {
 	}
 
 	// Wrap the health check in a logger.
-	app := LoggingHandler{
-		Next: health,
-	}
+	app := NewLoggingHandler(health)
 
 	http.ListenAndServe(":"+port, app)
 }
