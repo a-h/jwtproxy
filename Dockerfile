@@ -1,1 +1,3 @@
-FROM golang:onbuild
+FROM scratch
+ADD jwtproxy /
+CMD ["/jwtproxy"]
