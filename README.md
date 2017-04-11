@@ -13,7 +13,7 @@ openssl rsa -in example_private.pem -outform PEM -pubout -out example_public.pem
 ```
 
 You start the proxy passing it a map of issuers to public keys. You'll need to replace newlines
-with \n in JSON.
+with \n in JSON, e.g. by `cat dev_pub.pem | tr '\n' '_' | sed 's/_/\\n/g' > dev_pub2.pem`
 
 - keys.json
 ```
