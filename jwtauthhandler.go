@@ -10,6 +10,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 )
 
+// JWTAuthHandler provides the capability to authenticate incoming HTTP requests.
 type JWTAuthHandler struct {
 	Keys       map[string]string
 	Next       http.Handler
@@ -17,6 +18,8 @@ type JWTAuthHandler struct {
 	middleware *jwtmiddleware.JWTMiddleware
 }
 
+// NewJWTAuthHandler creates a new JWTAuthHandler, passing in a map of issuers to public RSA keys, and a
+// time provider to allow for variation of the time.
 func NewJWTAuthHandler(keys map[string]string, now func() time.Time, next http.Handler) JWTAuthHandler {
 	h := JWTAuthHandler{
 		Keys: keys,
