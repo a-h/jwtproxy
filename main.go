@@ -10,9 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
-
-	"github.com/auth0/go-jwt-middleware"
-	"github.com/dgrijalva/jwt-go"
+	"time"
 )
 
 var remoteURLFlag = flag.String("remoteURL", "", "The remote host to proxy to.")
@@ -41,40 +39,10 @@ func main() {
 		os.Exit(-1)
 	}
 
-	jwtmw := jwtmiddleware.New(jwtmiddleware.Options{
-		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
-			// Assume standard claims of "iss", "exp" and "iat".
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				return nil, errors.New("JWT claims not found")
-			}
-
-			// Find the public key to match the issuer.
-			issuerClaim, ok := claims["iss"]
-			if !ok {
-				return nil, errors.New("iss not found")
-			}
-
-			issuer, ok := issuerClaim.(string)
-			if !ok {
-				return nil, errors.New("iss was not in correct format")
-			}
-
-			pub, ok := keys[issuer]
-			if !ok {
-				return nil, errors.New("iss not valid")
-			}
-
-			return jwt.ParseRSAPublicKeyFromPEM([]byte(pub))
-		},
-		// When set, the middleware verifies that tokens are signed with the specific signing algorithm
-		// If the signing method is not constant the ValidationKeyGetter callback can be used to implement additional checks
-		// Important to avoid security issues described here: https://auth0.com/blog/2015/03/31/critical-vulnerabilities-in-json-web-token-libraries/
-		SigningMethod: jwt.SigningMethodRS256,
-	})
+	proxy := httputil.NewSingleHostReverseProxy(remoteURL)
 
 	// Wrap the proxy in authentication.
-	auth := jwtmw.Handler(httputil.NewSingleHostReverseProxy(remoteURL))
+	auth := NewJWTAuthHandler(keys, time.Now, proxy)
 
 	// Wrap the authentication in a health check (health checks don't need authentication).
 	health := HealthCheckHandler{
