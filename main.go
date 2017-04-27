@@ -10,10 +10,12 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
 var remoteURLFlag = flag.String("remoteURL", "", "The remote host to proxy to.")
+var remoteHostHeaderFlag = flag.String("remoteHostHeader", "", "The value of the 'Host' header to apply to outbound requests.")
 var keysFlag = flag.String("keys", "", "The location of the JSON map containing issuers and their public keys.")
 var portFlag = flag.String("port", "", "The port for the proxy to listen on.")
 var healthCheckFlag = flag.String("health", "/health", "The path to the healthcheck endpoint.")
@@ -46,7 +48,9 @@ func main() {
 		os.Exit(-1)
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(remoteURL)
+	remoteHostHeader := getRemoteHostHeader()
+
+	proxy := NewReverseProxy(remoteURL, remoteHostHeader)
 
 	// A request comes in to a load balancer of https://example.com/api/user?id=1
 	// We've pointed it to the RemoteURL of https://api.example.org/
@@ -70,10 +74,48 @@ func main() {
 	http.ListenAndServe(":"+port, app)
 }
 
+// NewReverseProxy creates a reverse proxy.
+func NewReverseProxy(target *url.URL, hostHeader string) *httputil.ReverseProxy {
+	targetQuery := target.RawQuery
+	director := func(req *http.Request) {
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+		req.URL.Path = singleJoiningSlash(target.Path, req.URL.Path)
+		if targetQuery == "" || req.URL.RawQuery == "" {
+			req.URL.RawQuery = targetQuery + req.URL.RawQuery
+		} else {
+			req.URL.RawQuery = targetQuery + "&" + req.URL.RawQuery
+		}
+		if _, ok := req.Header["User-Agent"]; !ok {
+			// explicitly disable User-Agent so it's not set to default value
+			req.Header.Set("User-Agent", "")
+		}
+		// Override the host header.
+		if hostHeader == "" {
+			req.Host = target.Host
+		} else {
+			req.Host = hostHeader
+		}
+	}
+	return &httputil.ReverseProxy{Director: director}
+}
+
+func singleJoiningSlash(a, b string) string {
+	aslash := strings.HasSuffix(a, "/")
+	bslash := strings.HasPrefix(b, "/")
+	switch {
+	case aslash && bslash:
+		return a + b[1:]
+	case !aslash && !bslash:
+		return a + "/" + b
+	}
+	return a + b
+}
+
 func getPort() (string, error) {
-	port := os.Getenv("JWTPROXY_LISTEN_PORT")
+	port := *portFlag
 	if port == "" {
-		port = *portFlag
+		port = os.Getenv("JWTPROXY_LISTEN_PORT")
 	}
 	if port == "" {
 		return "9090", errors.New("JWTPROXY_LISTEN_PORT environment variable or port command line flag not found")
@@ -82,9 +124,9 @@ func getPort() (string, error) {
 }
 
 func getRemoteURL() (*url.URL, error) {
-	remoteURL := os.Getenv("JWTPROXY_REMOTE_URL")
+	remoteURL := *remoteURLFlag
 	if remoteURL == "" {
-		remoteURL = *remoteURLFlag
+		remoteURL = os.Getenv("JWTPROXY_REMOTE_URL")
 	}
 	if remoteURL == "" {
 		return nil, errors.New("JWTPROXY_REMOTE_URL environment variable or remoteURL command line flag not found")
@@ -135,4 +177,12 @@ func getPrefix() string {
 		prefix = os.Getenv("JWTPROXY_PREFIX")
 	}
 	return prefix
+}
+
+func getRemoteHostHeader() string {
+	h := *remoteHostHeaderFlag
+	if h == "" {
+		h = os.Getenv("JWTPROXY_REMOTE_HOST_HEADER")
+	}
+	return h
 }
