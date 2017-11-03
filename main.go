@@ -30,7 +30,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	keys, err := getKeys()
+	keys, err := getKeys(os.Environ())
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(-1)
@@ -138,14 +138,66 @@ func getRemoteURL() (*url.URL, error) {
 	return u, nil
 }
 
-func getKeys() (map[string]string, error) {
+func getKeys(environ []string) (map[string]string, error) {
+	keys, err := getKeysFromEnvironment(environ)
+	if err != nil {
+		return keys, err
+	}
+	fromConfig, err := getKeysFromConfigFile()
+	if err != nil {
+		return fromConfig, err
+	}
+	for k, v := range fromConfig {
+		keys[k] = v
+	}
+	return keys, nil
+}
+
+func getKeysFromEnvironment(environ []string) (map[string]string, error) {
+	issuerPrefix := "JWTPROXY_ISSUER_"
+	keyPrefix := "JWTPROXY_PUBLIC_KEY_"
+
+	suffixToIssuerMap := make(map[string]string)
+	suffixToKeyMap := make(map[string]string)
+
+	for _, s := range environ {
+		parts := strings.Split(s, "=")
+		envName := parts[0]
+		if strings.HasPrefix(envName, issuerPrefix) {
+			suffix := envName[len(issuerPrefix):]
+			suffixToIssuerMap[suffix] = parts[1]
+		}
+		if strings.HasPrefix(envName, keyPrefix) {
+			suffix := envName[len(keyPrefix):]
+			suffixToKeyMap[suffix] = parts[1]
+		}
+	}
+
+	return zip(suffixToIssuerMap, suffixToKeyMap)
+}
+
+func zip(keys, values map[string]string) (map[string]string, error) {
+	m := make(map[string]string)
+
+	for suffix, issuer := range keys {
+		value, ok := values[suffix]
+		if !ok {
+			return m, fmt.Errorf("could not find a matching JWTPROXY_PUBLIC_KEY_%s value for JWTPROXY_ISSUER_%s", suffix, suffix)
+		}
+		m[issuer] = value
+	}
+
+	return m, nil
+}
+
+func getKeysFromConfigFile() (map[string]string, error) {
 	keys := make(map[string]string)
 	configPath := os.Getenv("JWTPROXY_CONFIG")
 	if configPath == "" {
 		configPath = *keysFlag
 	}
 	if configPath == "" {
-		return keys, errors.New("JWTPROXY_CONFIG environment variable or config command line flag not found")
+		return keys, nil
 	}
 	file, err := os.Open(configPath)
 	defer file.Close()
