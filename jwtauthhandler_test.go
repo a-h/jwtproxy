@@ -24,7 +24,7 @@ func TestJWTHandling(t *testing.T) {
 			name:               "missing JWT header",
 			request:            httptest.NewRequest("GET", "/", nil),
 			expectedStatusCode: http.StatusUnauthorized,
-			expectedBody:       "jwt missing",
+			expectedBody:       "Required authorization token not found",
 		},
 		{
 			name: "Junk format for authorization header",

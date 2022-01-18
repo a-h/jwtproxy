@@ -49,7 +49,7 @@ func ErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, ErrJWTIssuerNotValid):
 		_, _ = w.Write([]byte("iss not valid"))
 	case errors.Is(err, jwtmiddleware.ErrJWTMissing):
-		_, _ = w.Write([]byte("jwt missing"))
+		_, _ = w.Write([]byte("Required authorization token not found"))
 	case errors.Is(err, ErrJWTClaimFormatNotValid):
 		_, _ = w.Write([]byte("invalid claims"))
 	case errors.Is(err, ErrJWTInvalidToken):
