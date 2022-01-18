@@ -18,6 +18,7 @@ func TestJWTHandling(t *testing.T) {
 		expectedBody       string
 		expectedNextCalled bool
 		now                func() time.Time
+		authHeader         string
 	}{
 		{
 			name:               "missing JWT header",
@@ -33,7 +34,7 @@ func TestJWTHandling(t *testing.T) {
 				return r
 			}(),
 			expectedStatusCode: http.StatusUnauthorized,
-			expectedBody:       "error extracting token: Authorization header format must be Bearer {token}",
+			expectedBody:       "Authorization header format must be Bearer {token}",
 		},
 		{
 			name: "Invalid JWT",
@@ -100,6 +101,19 @@ func TestJWTHandling(t *testing.T) {
 			now:                func() time.Time { return time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC) },
 		},
 		{
+			name: "Valid with other authorization header",
+			request: func() *http.Request {
+				r := httptest.NewRequest("GET", "/", nil)
+				r.Header.Add("X-Other-Authorization", "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJleGFtcGxlLmNvbSIsImV4cCI6MTUxNDc2NDgwMH0.aGNUa78lwsARfdoClbTYeWoFmPJoLpyLOJBBlUQnt-VXVwcn9x0mKCzP6bBoS8eU27-iE2dZXvCMYgwcITocH6EAP5MKgeARUGYaT30MvtokdLTYCXlgW1TQiT3QLNdae0wUSzTXgN6BkYckYeZqlyI77m15tJTMQCYkQOfEIPIUl80nwYOR1cPNheZ0tClYUUfqGG-QOcO9gEAN5C83lMdfikFoNfIXlVCwcDgf7iLll9VpGaKCEjZfKGoRkGO9VhsLgJgMZzLWJaPack25lkepc_jGKRcc4i8q_c9Um1Hzv4E8WKOg9DwgOgG7GY_rk7yXytya0ie5Wm-CO-oupg")
+				return r
+			}(),
+			expectedStatusCode: http.StatusOK,
+			expectedBody:       "OK",
+			expectedNextCalled: true,
+			now:                func() time.Time { return time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC) },
+			authHeader:         "X-Other-Authorization",
+		},
+		{
 			name: "Valid exp, issuer happens to be a number",
 			request: func() *http.Request {
 				r := httptest.NewRequest("GET", "/", nil)
@@ -148,7 +162,12 @@ nQIDAQAB
 			now = test.now
 		}
 
-		handler := NewJWTAuthHandler(keys, now, next)
+		authHeader := "Authorization"
+		if test.authHeader != "" {
+			authHeader = test.authHeader
+		}
+
+		handler := NewJWTAuthHandler(keys, now, authHeader, next)
 		recorder := httptest.NewRecorder()
 
 		// Act

@@ -2,14 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	jwtmiddleware "github.com/auth0/go-jwt-middleware/v2"
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	golangjwt "github.com/golang-jwt/jwt/v4"
-
-	"errors"
 	"gopkg.in/square/go-jose.v2/jwt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -30,6 +30,7 @@ var (
 	ErrJWTInvalidExpiry       = errors.New("token expired")
 	ErrJWTInvalidSigningAlg   = errors.New(invalidSingingAlg)
 	ErrJWTClaimFormatNotValid = errors.New("could not find claims")
+	ErrJWTInvalidToken        = errors.New("Authorization header format must be Bearer {token}")
 )
 
 // More finegrained ErrorHandler than the default.
@@ -51,14 +52,16 @@ func ErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
 		_, _ = w.Write([]byte("jwt missing"))
 	case errors.Is(err, ErrJWTClaimFormatNotValid):
 		_, _ = w.Write([]byte("invalid claims"))
+	case errors.Is(err, ErrJWTInvalidToken):
+		_, _ = w.Write([]byte("Authorization header format must be Bearer {token}"))
 	default:
-		_, _ = w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte("jwt invalid"))
 	}
 }
 
 // NewJWTAuthHandler creates a new JWTAuthHandler, passing in a map of issuers to public RSA keys, and a
 // time provider to allow for variation of the time.
-func NewJWTAuthHandler(keys map[string]string, now func() time.Time, next http.Handler) JWTAuthHandler {
+func NewJWTAuthHandler(keys map[string]string, now func() time.Time, authHeader string, next http.Handler) JWTAuthHandler {
 	h := JWTAuthHandler{
 		Keys: keys,
 		Next: next,
@@ -112,7 +115,20 @@ func NewJWTAuthHandler(keys map[string]string, now func() time.Time, next http.H
 			return claims, nil
 
 		},
-		jwtmiddleware.WithErrorHandler(ErrorHandler))
+		jwtmiddleware.WithErrorHandler(ErrorHandler),
+		jwtmiddleware.WithTokenExtractor(func(r *http.Request) (string, error) {
+			authHeader := r.Header.Get(authHeader)
+			if authHeader == "" {
+				return "", nil // No error, just no JWT.
+			}
+
+			authHeaderParts := strings.Fields(authHeader)
+			if len(authHeaderParts) != 2 || strings.ToLower(authHeaderParts[0]) != "bearer" {
+				return "", ErrJWTInvalidToken
+			}
+
+			return authHeaderParts[1], nil
+		}))
 
 	return h
 }
