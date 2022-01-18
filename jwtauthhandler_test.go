@@ -23,7 +23,7 @@ func TestJWTHandling(t *testing.T) {
 			name:               "missing JWT header",
 			request:            httptest.NewRequest("GET", "/", nil),
 			expectedStatusCode: http.StatusUnauthorized,
-			expectedBody:       "Required authorization token not found",
+			expectedBody:       "jwt missing",
 		},
 		{
 			name: "Junk format for authorization header",
@@ -33,7 +33,7 @@ func TestJWTHandling(t *testing.T) {
 				return r
 			}(),
 			expectedStatusCode: http.StatusUnauthorized,
-			expectedBody:       "Authorization header format must be Bearer {token}",
+			expectedBody:       "error extracting token: Authorization header format must be Bearer {token}",
 		},
 		{
 			name: "Invalid JWT",
@@ -49,7 +49,7 @@ func TestJWTHandling(t *testing.T) {
 			name: "Missing exp field",
 			request: func() *http.Request {
 				r := httptest.NewRequest("GET", "/", nil)
-				r.Header.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWV9.TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ")
+				r.Header.Add("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJleGFtcGxlLmNvbSJ9.j2MxQgF6XbleT04c7M_zvP_JlL8M1Af5foUO5lf4UH5PLzpkjdZtVgbGkNUljQWZJ1PGe4VCwrPf_jJ2yai4hQk7xlOFGjnYJoF8D1wc1phPfAH_RDnIcIRmHbU-d3f5HsKyQI5v1Ba0dS4dzwxWyM0H80gKnhy-2afzWndsNVa0oFA9mrxUow7HveS77bRdoA5WzJPEQCaKg_2uDn3KnmI68qntaTdHJC5VULYclalsr3apxUXKNtMgBscq6r57CSqlOrnmCy9S9pGDvSFk4KbF4ZMhFYBB4YDC25vSFgWDg3XGev0_Tkw0crs0ndgXJPdykeKlLzQA3i1zE4_ysw")
 				return r
 			}(),
 			expectedStatusCode: http.StatusUnauthorized,
@@ -59,7 +59,7 @@ func TestJWTHandling(t *testing.T) {
 			name: "Expired on 1st January 2017",
 			request: func() *http.Request {
 				r := httptest.NewRequest("GET", "/", nil)
-				r.Header.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjoxNDgzMjI4ODAwfQ.-x4JLnDdmmyENZoY_Cr3E8_aShD_PpWih5vI7EfRqOc")
+				r.Header.Add("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJleGFtcGxlLmNvbSIsImV4cCI6MTQ4MzIyODgwMH0.uTEmiM8qDMPpKvhaNRrir7wQUJ0mtwMdafjg4y5pADBtyLr93JYhbSxsugIA0TqLLQmLgUyTZGVy3ACzbvHdsyCrSgdVqaN7zFuN3v2XrYzfHFwU4fZIB5ZnuK-V70TMOWYdSOOU-vNZts35FLWvdEM12u4vZrHkV8sBkSYuV137y3APse463ejBbqlLEljbZ2RXlJHwB8OMZHzDpPE-dpl9AkltAZp-xJM3EbD1HHIAzZcBUK1HhRe8-GBzKayEnBWN9vOfsOEwmO5o4RE5Tf7v1NkQChCQiwm-OXaQRHIem0I3v8R4YS4b1ErFcfbDbWy5FFY0jJqog8-3_5MqyQ")
 				return r
 			}(),
 			expectedStatusCode: http.StatusUnauthorized,
@@ -69,11 +69,22 @@ func TestJWTHandling(t *testing.T) {
 			name: "Expired on 1st January 2017, but today is 1st January 2016",
 			request: func() *http.Request {
 				r := httptest.NewRequest("GET", "/", nil)
+				r.Header.Add("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE0ODMyMjg4MDB9.zt87SYVKKbewLboxen033MGGCyW9fqoivUpeWe7zSi6QorRBXsknsP9a6AABy7UrcOu0jMzmzoCNkDODsw3VE-4wLnnvga_NlRsy70Cib_2XIUVpy6yTm9-GR8dqTU0Lckxdeu2EIfh6FrZiGQ8KPHr23tgSpTysPKL5kmUweDgu58Rfl2qK0ImzuZ3L7PGsqeTcRyWMTdVPUr1eDW6o17l8qnqj0vOlLWNjoLC1TSLJiZ3GzqVy1hj2JnT6V5bWdCzULGG-099ip8XRYr_yWje0UmCTZgRe9bKweuGvtDdrV5JMzCPS-CK-VArJWdcjymZtT8B5QitYZhhpKQTiCQ")
+				return r
+			}(),
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedBody:       "iss not valid",
+			now:                func() time.Time { return time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC) },
+		},
+		{
+			name: "Wrong signing algorithm",
+			request: func() *http.Request {
+				r := httptest.NewRequest("GET", "/", nil)
 				r.Header.Add("Authorization", "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiZXhwIjoxNDgzMjI4ODAwfQ.-x4JLnDdmmyENZoY_Cr3E8_aShD_PpWih5vI7EfRqOc")
 				return r
 			}(),
 			expectedStatusCode: http.StatusUnauthorized,
-			expectedBody:       "iss not found",
+			expectedBody:       "invalid signing algorithm, expected \"RS256\"",
 			now:                func() time.Time { return time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC) },
 		},
 		{
@@ -96,7 +107,7 @@ func TestJWTHandling(t *testing.T) {
 				return r
 			}(),
 			expectedStatusCode: http.StatusUnauthorized,
-			expectedBody:       "iss was not in correct format",
+			expectedBody:       "invalid claims",
 			now:                func() time.Time { return time.Date(2016, 1, 1, 0, 0, 0, 0, time.UTC) },
 		},
 		{

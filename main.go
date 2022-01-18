@@ -21,6 +21,8 @@ var portFlag = flag.String("port", "", "The port for the proxy to listen on.")
 var healthCheckFlag = flag.String("health", "/health", "The path to the healthcheck endpoint.")
 var prefixFlag = flag.String("prefix", "", "The prefix to strip from incoming requests applied to the remote URL, e.g to make /api/user?id=1 map to /user?id=1")
 
+//var proxyHeaderFlag = flag.String("proxyHeader", "", "the HTTP header for the proxy (default 'Authorization')")
+
 func main() {
 	flag.Parse()
 
