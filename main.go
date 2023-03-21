@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -100,7 +101,20 @@ func NewReverseProxy(target *url.URL, hostHeader string) *httputil.ReverseProxy 
 			req.Host = hostHeader
 		}
 	}
-	return &httputil.ReverseProxy{Director: director}
+
+	// Create a new reverse proxy
+	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	// Create a custom transport that ignores SSL certificate errors
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	// Assign the custom transport to the proxy
+	proxy.Transport = transport
+	proxy.Director = director
+
+	return proxy
 }
 
 func singleJoiningSlash(a, b string) string {
