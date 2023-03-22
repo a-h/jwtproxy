@@ -23,7 +23,7 @@ var portFlag = flag.String("port", "", "The port for the proxy to listen on.")
 var healthCheckFlag = flag.String("health", "/health", "The path to the healthcheck endpoint.")
 var prefixFlag = flag.String("prefix", "", "The prefix to strip from incoming requests applied to the remote URL, e.g to make /api/user?id=1 map to /user?id=1")
 var authHeaderFlag = flag.String("authHeader", "Authorization", "the HTTP header for the proxy (default 'Authorization')")
-var strictSslFlag = flag.Bool("strict-ssl", true, "Set flag when strict ssl needs to be off")
+var strictSslFlag = flag.Bool("strictSsl", true, "Set flag to set strict ssl on (default) and off")
 
 func main() {
 
