@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -10,6 +11,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,8 +23,10 @@ var portFlag = flag.String("port", "", "The port for the proxy to listen on.")
 var healthCheckFlag = flag.String("health", "/health", "The path to the healthcheck endpoint.")
 var prefixFlag = flag.String("prefix", "", "The prefix to strip from incoming requests applied to the remote URL, e.g to make /api/user?id=1 map to /user?id=1")
 var authHeaderFlag = flag.String("authHeader", "Authorization", "the HTTP header for the proxy (default 'Authorization')")
+var strictSslFlag = flag.Bool("strict-ssl", true, "Set flag when strict ssl needs to be off")
 
 func main() {
+
 	flag.Parse()
 
 	remoteURL, err := getRemoteURL()
@@ -51,9 +55,15 @@ func main() {
 		os.Exit(-1)
 	}
 
+	strictSsl, err := getStrictSsl()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(-1)
+	}
+
 	remoteHostHeader := getRemoteHostHeader()
 
-	proxy := NewReverseProxy(remoteURL, remoteHostHeader)
+	proxy := NewReverseProxy(remoteURL, remoteHostHeader, strictSsl, authHeader)
 
 	// A request comes in to a load balancer of https://example.com/api/user?id=1
 	// We've pointed it to the RemoteURL of https://api.example.org/
@@ -78,12 +88,18 @@ func main() {
 }
 
 // NewReverseProxy creates a reverse proxy.
-func NewReverseProxy(target *url.URL, hostHeader string) *httputil.ReverseProxy {
+func NewReverseProxy(target *url.URL, hostHeader string, strictSsl bool, authHeader string) *httputil.ReverseProxy {
 	targetQuery := target.RawQuery
 	director := func(req *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = singleJoiningSlash(target.Path, req.URL.Path)
+
+		print("\n" + req.URL.Scheme)
+		print("\n" + req.URL.Host)
+		print("\n" + req.URL.Path)
+		print("\n")
+
 		if targetQuery == "" || req.URL.RawQuery == "" {
 			req.URL.RawQuery = targetQuery + req.URL.RawQuery
 		} else {
@@ -93,6 +109,8 @@ func NewReverseProxy(target *url.URL, hostHeader string) *httputil.ReverseProxy 
 			// explicitly disable User-Agent so it's not set to default value
 			req.Header.Set("User-Agent", "")
 		}
+		req.Header.Del(authHeader)
+
 		// Override the host header.
 		if hostHeader == "" {
 			req.Host = target.Host
@@ -100,7 +118,19 @@ func NewReverseProxy(target *url.URL, hostHeader string) *httputil.ReverseProxy 
 			req.Host = hostHeader
 		}
 	}
-	return &httputil.ReverseProxy{Director: director}
+
+	var insecureSkipVerify = !strictSsl
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecureSkipVerify},
+	}
+
+	// Assign the custom transport to the proxy
+	proxy.Transport = transport
+	proxy.Director = director
+
+	return proxy
 }
 
 func singleJoiningSlash(a, b string) string {
@@ -255,4 +285,24 @@ func getRemoteHostHeader() string {
 		h = os.Getenv("JWTPROXY_REMOTE_HOST_HEADER")
 	}
 	return h
+}
+
+func getStrictSsl() (bool, error) {
+	var envLabelStrictSsl = "JWTPROXY_STRICT_SSL"
+
+	h := *strictSslFlag
+
+	val, present := os.LookupEnv(envLabelStrictSsl)
+
+	if h && present {
+		boolVal, err := strconv.ParseBool(val)
+
+		if err != nil {
+			return h, fmt.Errorf("could not load %s with value '%s', please use a valid boolean value", envLabelStrictSsl, val)
+		}
+
+		h = boolVal
+	}
+
+	return h, nil
 }
